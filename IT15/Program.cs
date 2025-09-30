@@ -3,13 +3,10 @@ using IT15.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
-using Resend;
 using Npgsql;
-
+using System;
 
 var builder = WebApplication.CreateBuilder(args);
-
-
 
 // Get DATABASE_URL from Render env vars
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
@@ -22,12 +19,11 @@ if (string.IsNullOrEmpty(databaseUrl))
 var databaseUri = new Uri(databaseUrl);
 var userInfo = databaseUri.UserInfo.Split(':');
 
-var port = databaseUri.Port != -1 ? databaseUri.Port : 5432;
-
 var connectionString = new NpgsqlConnectionStringBuilder
 {
     Host = databaseUri.Host,
-    Port = databaseUri.Port,
+    // THE FIX: Explicitly check if the port is -1 and default to 5432.
+    Port = databaseUri.Port > 0 ? databaseUri.Port : 5432,
     Username = userInfo[0],
     Password = userInfo[1],
     Database = databaseUri.AbsolutePath.TrimStart('/'),
@@ -52,21 +48,15 @@ builder.Configuration
 
 builder.Logging.AddConsole();
 
-// --- KEY CHANGES ---
-
-// 1. Register your custom EmailSender service
+// Register application services
 builder.Services.AddTransient<IEmailSender, EmailSender>();
 builder.Services.AddTransient<ISmsSender, SmsSender>();
 builder.Services.AddHttpClient<HolidayApiService>();
-
 builder.Services.AddHttpClient<IncomeApiService>(client =>
 {
     client.BaseAddress = new Uri("https://fakestoreapi.com/");
 });
-
 builder.Services.AddScoped<IAuditService, AuditService>();
-
-// Configure Resend using the recommended IHttpClientFactory approach.
 
 
 builder.Services.ConfigureApplicationCookie(options =>
@@ -97,7 +87,6 @@ builder.Services.AddControllersWithViews();
 
 var app = builder.Build();
 
-// Seed the database
 // Seed the database and apply migrations
 using (var scope = app.Services.CreateScope())
 {
@@ -105,7 +94,7 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var db = services.GetRequiredService<ApplicationDbContext>();
-        db.Database.Migrate(); //  applies pending migrations automatically
+        db.Database.Migrate();
 
         var configuration = services.GetRequiredService<IConfiguration>();
         await SeedData.Initialize(services, configuration);
@@ -119,10 +108,8 @@ using (var scope = app.Services.CreateScope())
 
 
 // Configure the HTTP request pipeline.
-// THIS IS THE MOST IMPORTANT SECTION FOR DEBUGGING
 if (app.Environment.IsDevelopment())
 {
-    // This will replace the "page not exist" error with a detailed error report.
     app.UseDeveloperExceptionPage();
     app.UseMigrationsEndPoint();
 }
@@ -135,9 +122,8 @@ else
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 
-// The order of these three lines is CRITICAL for routing and security to work.
 app.UseRouting();
-app.UseAuthentication(); // <-- This was likely missing and is required.
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllerRoute(

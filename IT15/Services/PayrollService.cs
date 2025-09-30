@@ -100,7 +100,7 @@ namespace IT15.Services
                     SSSDeduction = sss,
                     PhilHealthDeduction = philhealth,
                     PagIBIGDeduction = pagibig,
-                    TaxDeduction = 0,
+                    TaxDeduction = 10,
                     GrossPay = grossPay,
                     TotalDeductions = totalDeductions,
                     NetPay = netPay
