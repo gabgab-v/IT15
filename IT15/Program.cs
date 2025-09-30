@@ -10,26 +10,33 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Get DATABASE_URL from Render env vars
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
-if (string.IsNullOrEmpty(databaseUrl))
+string connectionString;
+
+if (!string.IsNullOrEmpty(databaseUrl))
 {
-    throw new InvalidOperationException("DATABASE_URL environment variable not set.");
+    // Parse DATABASE_URL
+    var databaseUri = new Uri(databaseUrl);
+    var userInfo = databaseUri.UserInfo.Split(':');
+
+    connectionString = new NpgsqlConnectionStringBuilder
+    {
+        Host = databaseUri.Host,
+        Port = databaseUri.Port > 0 ? databaseUri.Port : 5432, // default to 5432
+        Username = userInfo[0],
+        Password = userInfo[1],
+        Database = databaseUri.AbsolutePath.TrimStart('/'),
+        SslMode = SslMode.Require,
+        TrustServerCertificate = true
+    }.ToString();
+}
+else
+{
+    // Fallback to local appsettings.json
+    connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+        ?? throw new InvalidOperationException("No connection string configured.");
 }
 
-// Parse the DATABASE_URL into a proper connection string for Npgsql
-var databaseUri = new Uri(databaseUrl);
-var userInfo = databaseUri.UserInfo.Split(':');
 
-var connectionString = new NpgsqlConnectionStringBuilder
-{
-    Host = databaseUri.Host,
-    // THE FIX: Explicitly check if the port is -1 and default to 5432.
-    Port = databaseUri.Port > 0 ? databaseUri.Port : 5432,
-    Username = userInfo[0],
-    Password = userInfo[1],
-    Database = databaseUri.AbsolutePath.TrimStart('/'),
-    SslMode = SslMode.Require,
-    TrustServerCertificate = true
-}.ToString();
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(connectionString));
