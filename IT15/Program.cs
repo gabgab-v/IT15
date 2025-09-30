@@ -22,6 +22,8 @@ if (string.IsNullOrEmpty(databaseUrl))
 var databaseUri = new Uri(databaseUrl);
 var userInfo = databaseUri.UserInfo.Split(':');
 
+var port = databaseUri.Port != -1 ? databaseUri.Port : 5432;
+
 var connectionString = new NpgsqlConnectionStringBuilder
 {
     Host = databaseUri.Host,
