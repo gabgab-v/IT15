@@ -19,8 +19,16 @@ if (string.IsNullOrEmpty(databaseUrl))
 }
 
 // Parse the DATABASE_URL into a proper connection string for Npgsql
-var connectionString = new NpgsqlConnectionStringBuilder(databaseUrl)
+var databaseUri = new Uri(databaseUrl);
+var userInfo = databaseUri.UserInfo.Split(':');
+
+var connectionString = new NpgsqlConnectionStringBuilder
 {
+    Host = databaseUri.Host,
+    Port = databaseUri.Port,
+    Username = userInfo[0],
+    Password = userInfo[1],
+    Database = databaseUri.AbsolutePath.TrimStart('/'),
     SslMode = SslMode.Require,
     TrustServerCertificate = true
 }.ToString();
