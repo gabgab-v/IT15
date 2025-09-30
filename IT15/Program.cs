@@ -4,13 +4,31 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
 using Resend;
+using Npgsql;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+
+
+// Get DATABASE_URL from Render env vars
+var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+if (string.IsNullOrEmpty(databaseUrl))
+{
+    throw new InvalidOperationException("DATABASE_URL environment variable not set.");
+}
+
+// Parse the DATABASE_URL into a proper connection string for Npgsql
+var connectionString = new NpgsqlConnectionStringBuilder(databaseUrl)
+{
+    SslMode = SslMode.Require,
+    TrustServerCertificate = true
+}.ToString();
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseNpgsql(connectionString));
+
+
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 builder.Services.AddScoped<IT15.Services.PayrollService>();
 
@@ -70,13 +88,16 @@ builder.Services.AddControllersWithViews();
 var app = builder.Build();
 
 // Seed the database
+// Seed the database and apply migrations
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     try
     {
+        var db = services.GetRequiredService<ApplicationDbContext>();
+        db.Database.Migrate(); //  applies pending migrations automatically
+
         var configuration = services.GetRequiredService<IConfiguration>();
-        // THE FIX: This line is now active and will call your seeder.
         await SeedData.Initialize(services, configuration);
     }
     catch (Exception ex)
@@ -85,6 +106,7 @@ using (var scope = app.Services.CreateScope())
         logger.LogError(ex, "An error occurred while seeding the database.");
     }
 }
+
 
 // Configure the HTTP request pipeline.
 // THIS IS THE MOST IMPORTANT SECTION FOR DEBUGGING
